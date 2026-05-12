@@ -1,0 +1,93 @@
+<%
+  settings ||= {}
+  heatmap_settings = RedmineTxHeatmap::Settings.new(settings)
+  groups = Group.sorted.to_a
+  categories = IssueCategory.order(:name).to_a
+  rules = settings['estimate_rules'] || []
+  rules = rules.values if rules.is_a?(Hash)
+  rules = Array(rules)
+  rules += Array.new([5 - rules.length, 0].max) { {} }
+%>
+
+<fieldset class="box">
+  <legend>팀 구성</legend>
+  <p class="info">
+    팀 집계 제외 그룹, 팀별 제외 인원, 실 그룹핑은 <strong>Redmine Tx Base plugin</strong> 설정의
+    <strong>조직/팀 설정</strong> 탭에서 공용으로 관리합니다.
+  </p>
+  <p>
+    현재 팀 설정 소스:
+    <strong><%= heatmap_settings.team_settings_source == :tx_base ? 'redmine_tx_0_base 공용 설정' : '히트맵 기존 설정 fallback' %></strong>
+  </p>
+  <% if heatmap_settings.target_groups.any? %>
+    <p>
+      집계 대상 팀:
+      <%= heatmap_settings.target_groups.map { |group| "#{heatmap_settings.room_name_for_group(group.id).presence || '미분류'} / #{group.name}" }.join(', ') %>
+    </p>
+  <% else %>
+    <p class="warning">redmine_tx_0_base 설정의 조직/팀 설정 탭을 저장해야 합니다.</p>
+  <% end %>
+</fieldset>
+
+<fieldset class="box tabular">
+  <legend>기본 동작</legend>
+  <p>
+    <label>하위 프로젝트 기본 포함</label>
+    <%= hidden_field_tag 'settings[include_subprojects]', '0' %>
+    <%= check_box_tag 'settings[include_subprojects]', '1', heatmap_settings.include_subprojects? %>
+  </p>
+  <p>
+    <label>미매핑 행 표시</label>
+    <%= hidden_field_tag 'settings[show_unmapped]', '0' %>
+    <%= check_box_tag 'settings[show_unmapped]', '1', heatmap_settings.show_unmapped? %>
+  </p>
+  <p>
+    <label>기본 표시 단위</label>
+    <%= select_tag 'settings[default_period_unit]',
+                   options_for_select([['주 단위', 'week'], ['월 단위', 'month']], heatmap_settings.default_period_unit) %>
+  </p>
+  <%= hidden_field_tag 'settings[default_months]', heatmap_settings.default_months %>
+  <%= hidden_field_tag 'settings[default_weeks]', heatmap_settings.default_weeks %>
+  <p class="info">조회 결과는 프로젝트, 기간, 하위 프로젝트 포함 여부, 설정값 기준으로 1시간 캐싱됩니다.</p>
+</fieldset>
+
+<fieldset class="box">
+  <legend>정규표현식 MD 산정 규칙</legend>
+  <p class="info">estimated_hours가 없는 일감에만 적용됩니다. 제목을 정규표현식으로 검사하며, 그룹과 범주는 선택 제한 조건입니다.</p>
+  <table class="list">
+    <thead>
+      <tr>
+        <th>사용</th>
+        <th>제목 정규표현식</th>
+        <th>MD</th>
+        <th>그룹 제한</th>
+        <th>범주 제한</th>
+      </tr>
+    </thead>
+    <tbody>
+      <% rules.each_with_index do |rule, index| %>
+        <% rule = rule.is_a?(Hash) ? rule : {} %>
+        <tr>
+          <td>
+            <%= select_tag "settings[estimate_rules][#{index}][enabled]",
+                           options_for_select([['사용', '1'], ['미사용', '0']], rule.fetch('enabled', '1').to_s) %>
+          </td>
+          <td>
+            <%= text_field_tag "settings[estimate_rules][#{index}][pattern]", rule['pattern'], :size => 40 %>
+          </td>
+          <td>
+            <%= number_field_tag "settings[estimate_rules][#{index}][md]", rule['md'], :min => 0, :step => 0.25, :style => 'width: 7em;' %>
+          </td>
+          <td>
+            <%= select_tag "settings[estimate_rules][#{index}][group_id]",
+                           options_for_select([['전체', '']] + groups.map { |group| [group.name, group.id] }, rule['group_id'].to_s) %>
+          </td>
+          <td>
+            <%= select_tag "settings[estimate_rules][#{index}][category_id]",
+                           options_for_select([['전체', '']] + categories.map { |category| [category.name, category.id] }, rule['category_id'].to_s) %>
+          </td>
+        </tr>
+      <% end %>
+    </tbody>
+  </table>
+</fieldset>

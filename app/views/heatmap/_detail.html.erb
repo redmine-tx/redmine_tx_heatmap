@@ -1,0 +1,25 @@
+<% issue_list = heatmap_issue_list_data(@detail_entries) %>
+<% period_unit = @period_unit || @heatmap.dig(:period, :unit) || 'week' %>
+<% start_period_key = RedmineTxHeatmap::Calendar.period_key(@start_period, period_unit) %>
+<% end_period_key = RedmineTxHeatmap::Calendar.period_key(@end_period, period_unit) %>
+<% list_id = heatmap_detail_panel_id(@row_index, @detail_key) %>
+
+<div class="txhm-detail-panel" id="<%= list_id %>">
+  <h3><%= @detail_title %></h3>
+  <p class="txhm-detail-summary"><%= @detail_summary %></p>
+  <% if issue_list[:issues].any? %>
+    <%= render partial: 'shared/issue_list',
+               locals: {
+                 issues: issue_list[:issues],
+                 page_size: 20,
+                 columns: heatmap_issue_columns,
+                 column_values: issue_list[:column_values],
+                 column_sort_values: issue_list[:column_sort_values],
+                 form_url: url_for(:controller => 'heatmap', :action => 'index', :project_id => @project),
+                 back_url: url_for(:controller => 'heatmap', :action => 'index', :project_id => @project, :period_unit => period_unit, :start_period => start_period_key, :end_period => end_period_key, :include_subprojects => (@include_subprojects ? '1' : '0')),
+                 list_id: list_id
+               } %>
+  <% else %>
+    <p class="nodata"><%= l(:label_no_data) %></p>
+  <% end %>
+</div>

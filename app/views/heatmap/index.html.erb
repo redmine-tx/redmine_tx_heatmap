@@ -1,0 +1,229 @@
+<% content_for :header_tags do %>
+  <%= stylesheet_link_tag 'redmine_tx_heatmap', :plugin => 'redmine_tx_heatmap' %>
+  <%= javascript_include_tag 'redmine_tx_heatmap', :plugin => 'redmine_tx_heatmap' %>
+<% end %>
+
+<% load_class = lambda do |load, md|
+  if md.to_f <= 0
+    'txhm-empty'
+  elsif load < 0.4
+    'txhm-low'
+  elsif load < 0.75
+    'txhm-mid'
+  elsif load < 1.0
+    'txhm-high'
+  else
+    'txhm-over'
+  end
+end %>
+<% period_unit = @period_unit || @heatmap.dig(:period, :unit) || 'week' %>
+<% period_label = period_unit == 'month' ? '월' : '주' %>
+<% start_period = @start_period || @heatmap.dig(:period, :start_date) %>
+<% end_period = @end_period || @heatmap.dig(:period, :end_date) %>
+<% start_period_key = RedmineTxHeatmap::Calendar.period_key(start_period, period_unit) %>
+<% end_period_key = RedmineTxHeatmap::Calendar.period_key(end_period, period_unit) %>
+<% current_period_key = RedmineTxHeatmap::Calendar.period_key(Date.today, period_unit) %>
+<% current_week = RedmineTxHeatmap::Calendar.current_period_start('week') %>
+<% current_month = RedmineTxHeatmap::Calendar.current_period_start('month') %>
+<% default_week_start_key = RedmineTxHeatmap::Calendar.period_key(RedmineTxHeatmap::Calendar.advance_period(current_week, 'week', -3), 'week') %>
+<% default_week_end_key = RedmineTxHeatmap::Calendar.period_key(RedmineTxHeatmap::Calendar.advance_period(current_week, 'week', 8), 'week') %>
+<% default_month_start_key = RedmineTxHeatmap::Calendar.period_key(RedmineTxHeatmap::Calendar.advance_period(current_month, 'month', -3), 'month') %>
+<% default_month_end_key = RedmineTxHeatmap::Calendar.period_key(RedmineTxHeatmap::Calendar.advance_period(current_month, 'month', 8), 'month') %>
+<% heatmap_periods = @heatmap[:periods] || @heatmap[:months] %>
+<% show_room_column = @heatmap[:groups].any? { |row| row[:room_name].present? } %>
+<% room_rowspans = {} %>
+<% if show_room_column %>
+  <% room_index = 0 %>
+  <% while room_index < @heatmap[:groups].length %>
+    <% room_name = @heatmap[:groups][room_index][:room_name].presence || '미분류' %>
+    <% span = 1 %>
+    <% while room_index + span < @heatmap[:groups].length && ((@heatmap[:groups][room_index + span][:room_name].presence || '미분류') == room_name) %>
+      <% span += 1 %>
+    <% end %>
+    <% room_rowspans[room_index] = { :name => room_name, :span => span } %>
+    <% room_index += span %>
+  <% end %>
+<% end %>
+
+<h2>팀별 히트맵</h2>
+
+<%= form_tag url_for(:controller => 'heatmap', :action => 'index', :project_id => @project),
+             :method => :get,
+             :class => 'txhm-toolbar',
+             :data => {
+               :txhm_week_start => default_week_start_key,
+               :txhm_week_end => default_week_end_key,
+               :txhm_month_start => default_month_start_key,
+               :txhm_month_end => default_month_end_key
+             } do %>
+  <%= hidden_field_tag :project_id, @project.identifier %>
+  <label>
+    표시 단위
+    <%= select_tag :period_unit, options_for_select([['주', 'week'], ['월', 'month']], period_unit) %>
+  </label>
+  <label>
+    시작<span data-txhm-period-label><%= period_label %></span>
+    <%= text_field_tag :start_period, start_period_key, :type => period_unit, :data => { :txhm_period_input => 'start' } %>
+  </label>
+  <label>
+    종료<span data-txhm-period-label><%= period_label %></span>
+    <%= text_field_tag :end_period, end_period_key, :type => period_unit, :data => { :txhm_period_input => 'end' } %>
+  </label>
+  <label class="txhm-check">
+    <%= check_box_tag :include_subprojects, '1', @include_subprojects %>
+    하위 프로젝트 포함
+  </label>
+  <%= submit_tag '적용' %>
+  <%= link_to '새로고침', url_for(:controller => 'heatmap', :action => 'index', :project_id => @project, :period_unit => period_unit, :start_period => start_period_key, :end_period => end_period_key, :include_subprojects => (@include_subprojects ? '1' : '0'), :force => 'true'), :class => 'icon icon-reload' %>
+<% end %>
+
+<% if @heatmap[:groups].empty? %>
+  <div class="warning">
+    플러그인 설정에서 히트맵 대상 그룹을 선택해야 합니다.
+  </div>
+<% else %>
+  <div class="txhm-summary">
+    <span>기간: <%= @heatmap[:period][:start_date] %> - <%= @heatmap[:period][:end_date] %></span>
+    <span>전체: <%= number_with_precision(@heatmap[:totals][:md], :precision => 1, :strip_insignificant_zeros => true) %> MD / <%= number_with_precision(@heatmap[:totals][:capacity_md], :precision => 1, :strip_insignificant_zeros => true) %> MD</span>
+    <span>부하: <%= number_to_percentage(@heatmap[:totals][:load] * 100, :precision => 0) %></span>
+    <% if @heatmap[:totals][:unknown_count].to_i > 0 %>
+      <span>미산정: <%= @heatmap[:totals][:unknown_count] %>건</span>
+    <% end %>
+    <span>생성: <%= format_time(@heatmap[:generated_at]) %></span>
+    <span>하위 프로젝트: <%= @include_subprojects ? '포함' : '제외' %></span>
+  </div>
+
+  <div class="txhm-table-wrap">
+    <table class="list txhm-table">
+      <thead>
+        <tr>
+          <% if show_room_column %>
+            <th class="txhm-room">실</th>
+          <% end %>
+          <th class="txhm-team">그룹</th>
+          <th class="txhm-members">인원</th>
+          <% heatmap_periods.each do |period| %>
+            <% current_period = period[:key] == current_period_key %>
+            <th class="txhm-period <%= 'txhm-current-period' if current_period %>"<%= %( title="#{h(period[:title])}").html_safe if period[:title].present? %>>
+              <%= period[:label] %>
+              <% if current_period %>
+                <span class="txhm-current-badge">현재</span>
+              <% end %>
+            </th>
+          <% end %>
+          <th class="txhm-undated">날짜 없음</th>
+          <th class="txhm-total">합계</th>
+        </tr>
+      </thead>
+      <tbody>
+        <% @heatmap[:groups].each_with_index do |row, row_index| %>
+          <% row_room_name = row[:room_name].presence || '미분류' %>
+          <tr class="txhm-group-row <%= 'txhm-room-start' if show_room_column && room_rowspans[row_index] %>" data-txhm-group-row="<%= row_index %>"<%= %( data-txhm-room-key="#{h(row_room_name)}").html_safe if show_room_column %>>
+            <% if show_room_column && room_rowspans[row_index] %>
+              <td class="txhm-room txhm-room-group" rowspan="<%= room_rowspans[row_index][:span] %>" data-txhm-room-cell data-txhm-room-key="<%= row_room_name %>"><%= room_rowspans[row_index][:name] %></td>
+            <% end %>
+            <th class="txhm-team">
+              <% if Array(row[:members]).any? %>
+                <button type="button" class="txhm-group-toggle" data-txhm-toggle-members data-row-index="<%= row_index %>" aria-expanded="false">
+                  <span class="txhm-toggle-mark">+</span>
+                  <span><%= row[:name] %></span>
+                </button>
+              <% else %>
+                <%= row[:name] %>
+              <% end %>
+            </th>
+            <td class="txhm-members"><%= row[:member_count] %></td>
+            <% heatmap_periods.each do |period| %>
+              <% cell = (row[:periods] || row[:months])[period[:key]] %>
+              <% cls = load_class.call(cell[:load], cell[:md]) %>
+              <% current_period = period[:key] == current_period_key %>
+              <td class="txhm-cell-wrap <%= 'txhm-current-period' if current_period %>">
+                <button type="button"
+                        class="txhm-cell <%= cls %> <%= 'txhm-current-period' if current_period %>"
+                        data-row-index="<%= row_index %>"
+                        data-period-key="<%= period[:key] %>"
+                        data-detail-url="<%= url_for(:controller => 'heatmap', :action => 'detail', :project_id => @project, :period_unit => period_unit, :start_period => start_period_key, :end_period => end_period_key, :include_subprojects => (@include_subprojects ? '1' : '0'), :row_index => row_index, :period_key => period[:key]) %>">
+                  <span class="txhm-md"><%= number_with_precision(cell[:md], :precision => 1, :strip_insignificant_zeros => true) %></span>
+                  <span class="txhm-load"><%= number_to_percentage(cell[:load] * 100, :precision => 0) %></span>
+                  <% if cell[:unknown_count].to_i > 0 %>
+                    <span class="txhm-unknown">미산정 <%= cell[:unknown_count] %></span>
+                  <% end %>
+                </button>
+              </td>
+            <% end %>
+            <td class="txhm-cell-wrap">
+              <button type="button"
+                      class="txhm-cell txhm-undated-cell"
+                      data-row-index="<%= row_index %>"
+                      data-undated="1"
+                      data-detail-url="<%= url_for(:controller => 'heatmap', :action => 'detail', :project_id => @project, :period_unit => period_unit, :start_period => start_period_key, :end_period => end_period_key, :include_subprojects => (@include_subprojects ? '1' : '0'), :row_index => row_index, :undated => '1') %>">
+                <span class="txhm-md"><%= number_with_precision(row[:undated_md], :precision => 1, :strip_insignificant_zeros => true) %></span>
+                <% if row[:undated_unknown_count].to_i > 0 %>
+                  <span class="txhm-unknown">미산정 <%= row[:undated_unknown_count] %></span>
+                <% end %>
+              </button>
+            </td>
+            <td class="txhm-total">
+              <strong><%= number_with_precision(row[:total_md], :precision => 1, :strip_insignificant_zeros => true) %></strong>
+              <% if row[:total_unknown_count].to_i > 0 %>
+                <span class="txhm-total-unknown">+ 미산정 <%= row[:total_unknown_count] %></span>
+              <% end %>
+            </td>
+          </tr>
+          <% Array(row[:members]).each do |member| %>
+            <tr class="txhm-member-row" data-txhm-member-row data-txhm-parent-row="<%= row_index %>"<%= %( data-txhm-room-key="#{h(row_room_name)}").html_safe if show_room_column %> hidden>
+              <th class="txhm-team txhm-member-name"><%= member[:name] %></th>
+              <td class="txhm-members">1</td>
+              <% heatmap_periods.each do |period| %>
+                <% cell = (member[:periods] || member[:months])[period[:key]] %>
+                <% cls = load_class.call(cell[:load], cell[:md]) %>
+                <% current_period = period[:key] == current_period_key %>
+                <td class="txhm-cell-wrap <%= 'txhm-current-period' if current_period %>">
+                  <button type="button"
+                          class="txhm-cell txhm-member-cell <%= cls %> <%= 'txhm-current-period' if current_period %>"
+                          data-row-index="<%= row_index %>"
+                          data-member-user-id="<%= member[:user_id] %>"
+                          data-period-key="<%= period[:key] %>"
+                          data-detail-url="<%= url_for(:controller => 'heatmap', :action => 'detail', :project_id => @project, :period_unit => period_unit, :start_period => start_period_key, :end_period => end_period_key, :include_subprojects => (@include_subprojects ? '1' : '0'), :row_index => row_index, :member_user_id => member[:user_id], :period_key => period[:key]) %>">
+                    <span class="txhm-md"><%= number_with_precision(cell[:md], :precision => 1, :strip_insignificant_zeros => true) %></span>
+                    <span class="txhm-load"><%= number_to_percentage(cell[:load] * 100, :precision => 0) %></span>
+                    <% if cell[:unknown_count].to_i > 0 %>
+                      <span class="txhm-unknown">미산정 <%= cell[:unknown_count] %></span>
+                    <% end %>
+                  </button>
+                </td>
+              <% end %>
+              <td class="txhm-cell-wrap">
+                <button type="button"
+                        class="txhm-cell txhm-member-cell txhm-undated-cell"
+                        data-row-index="<%= row_index %>"
+                        data-member-user-id="<%= member[:user_id] %>"
+                        data-undated="1"
+                        data-detail-url="<%= url_for(:controller => 'heatmap', :action => 'detail', :project_id => @project, :period_unit => period_unit, :start_period => start_period_key, :end_period => end_period_key, :include_subprojects => (@include_subprojects ? '1' : '0'), :row_index => row_index, :member_user_id => member[:user_id], :undated => '1') %>">
+                  <span class="txhm-md"><%= number_with_precision(member[:undated_md], :precision => 1, :strip_insignificant_zeros => true) %></span>
+                  <% if member[:undated_unknown_count].to_i > 0 %>
+                    <span class="txhm-unknown">미산정 <%= member[:undated_unknown_count] %></span>
+                  <% end %>
+                </button>
+              </td>
+              <td class="txhm-total">
+                <strong><%= number_with_precision(member[:total_md], :precision => 1, :strip_insignificant_zeros => true) %></strong>
+                <% if member[:total_unknown_count].to_i > 0 %>
+                  <span class="txhm-total-unknown">+ 미산정 <%= member[:total_unknown_count] %></span>
+                <% end %>
+              </td>
+            </tr>
+          <% end %>
+        <% end %>
+      </tbody>
+    </table>
+  </div>
+
+  <section class="txhm-detail" id="txhm-detail">
+    <div class="txhm-detail-placeholder">
+      <h3>셀 상세</h3>
+      <p class="nodata">셀을 선택하면 일감 리스트가 표시됩니다.</p>
+    </div>
+    <div class="txhm-detail-content" id="txhm-detail-content" hidden></div>
+  </section>
+<% end %>

@@ -1,0 +1,294 @@
+.txhm-toolbar {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 14px;
+  margin: 0 0 14px;
+}
+
+.txhm-toolbar label {
+  align-items: center;
+  display: inline-flex;
+  gap: 6px;
+  white-space: nowrap;
+}
+
+.txhm-check {
+  min-height: 28px;
+}
+
+.txhm-summary {
+  color: #555;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  margin: 8px 0 12px;
+}
+
+.txhm-table-wrap {
+  overflow-x: auto;
+}
+
+.txhm-table {
+  min-width: 920px;
+  table-layout: fixed;
+}
+
+.txhm-table th,
+.txhm-table td {
+  vertical-align: middle;
+}
+
+table.list.txhm-table thead th {
+  border-bottom: 3px solid #8fa0ad !important;
+}
+
+table.list.txhm-table tbody tr.txhm-room-start > th,
+table.list.txhm-table tbody tr.txhm-room-start > td {
+  border-top: 3px solid #8fa0ad !important;
+}
+
+.txhm-table th.txhm-current-period {
+  background: #d7eaff;
+  border-left: 2px solid #2878c8;
+  border-right: 2px solid #2878c8;
+  color: #0d467d;
+}
+
+.txhm-cell-wrap.txhm-current-period {
+  background: #eef6ff;
+  border-left: 2px solid #2878c8;
+  border-right: 2px solid #2878c8;
+}
+
+.txhm-team {
+  min-width: 140px;
+  text-align: center;
+  width: 150px;
+}
+
+.txhm-group-row > .txhm-team {
+  font-weight: 700;
+}
+
+.txhm-group-toggle {
+  align-items: center;
+  background: transparent;
+  border: 0;
+  color: #116699;
+  cursor: pointer;
+  display: inline-flex;
+  font: inherit;
+  font-weight: 700;
+  gap: 5px;
+  justify-content: center;
+  padding: 0;
+  text-align: center;
+}
+
+.txhm-group-toggle:hover,
+.txhm-group-toggle:focus {
+  color: #0b4f78;
+  text-decoration: underline;
+}
+
+.txhm-toggle-mark {
+  background: #eef4f8;
+  border: 1px solid #7f93a3;
+  border-radius: 3px;
+  box-sizing: border-box;
+  display: inline-block;
+  font-weight: 700;
+  line-height: 14px;
+  min-width: 16px;
+  text-align: center;
+}
+
+table.list.txhm-table tbody tr.txhm-member-row > th,
+table.list.txhm-table tbody tr.txhm-member-row > td {
+  background: #dfeaf2 !important;
+  border-top-color: #c2d1dc;
+}
+
+.txhm-member-name {
+  color: #40515d;
+  font-size: 12px;
+  font-weight: normal;
+  padding-right: 14px !important;
+  text-align: right;
+}
+
+.txhm-member-name::before {
+  color: #7f93a3;
+  content: "└ ";
+  font-weight: 700;
+}
+
+.txhm-member-row .txhm-members,
+.txhm-member-row .txhm-total {
+  color: #40515d;
+  font-size: 12px;
+}
+
+.txhm-room {
+  min-width: 92px;
+  text-align: center;
+  width: 104px;
+}
+
+.txhm-room-group {
+  background: #f3f6f8;
+  border-right: 1px solid #ccd5dd;
+  font-weight: 700;
+}
+
+.txhm-members {
+  text-align: center;
+  width: 54px;
+}
+
+table.list.txhm-table td.txhm-room,
+table.list.txhm-table th.txhm-team,
+table.list.txhm-table td.txhm-members {
+  vertical-align: middle;
+}
+
+.txhm-undated {
+  width: 94px;
+}
+
+.txhm-total {
+  width: 96px;
+}
+
+.txhm-cell-wrap {
+  padding: 3px;
+}
+
+.txhm-cell {
+  border: 1px solid #c8d0d8;
+  border-radius: 4px;
+  box-sizing: border-box;
+  color: #1f2a35;
+  cursor: pointer;
+  display: grid;
+  gap: 2px;
+  min-height: 54px;
+  padding: 6px 5px;
+  text-align: center;
+  width: 100%;
+}
+
+.txhm-cell:hover,
+.txhm-cell:focus {
+  border-color: #2a73b8;
+  box-shadow: 0 0 0 2px rgba(42, 115, 184, 0.15);
+  outline: none;
+}
+
+.txhm-cell.txhm-current-period {
+  border-color: #2878c8;
+  box-shadow: inset 0 0 0 1px rgba(40, 120, 200, 0.5);
+}
+
+.txhm-member-cell {
+  border-color: #a9bac8;
+  box-shadow: inset 3px 0 0 rgba(93, 113, 128, 0.35);
+  font-size: 12px;
+  min-height: 44px;
+  padding-bottom: 5px;
+  padding-top: 5px;
+}
+
+.txhm-current-badge {
+  background: #2878c8;
+  border-radius: 3px;
+  color: #fff;
+  display: inline-block;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1.2;
+  margin-left: 4px;
+  padding: 2px 4px;
+  vertical-align: middle;
+}
+
+.txhm-md {
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.txhm-load,
+.txhm-unknown {
+  font-size: 11px;
+  line-height: 1.2;
+}
+
+.txhm-empty {
+  background: #f6f7f8;
+  color: #697782;
+}
+
+.txhm-low {
+  background: #dff2e1;
+}
+
+.txhm-mid {
+  background: #fff2b8;
+}
+
+.txhm-high {
+  background: #ffd59a;
+}
+
+.txhm-over {
+  background: #f5a3a3;
+}
+
+.txhm-undated-cell {
+  background: #e4eef8;
+}
+
+.txhm-total-unknown {
+  color: #777;
+  display: block;
+  font-size: 11px;
+  font-weight: normal;
+}
+
+.txhm-detail {
+  border: 1px solid #d7d7d7;
+  border-radius: 4px;
+  margin-top: 14px;
+  padding: 12px;
+}
+
+.txhm-detail h3 {
+  margin-top: 0;
+}
+
+.txhm-detail-summary {
+  color: #555;
+  margin: 0 0 10px;
+}
+
+.txhm-detail-panel[hidden] {
+  display: none;
+}
+
+.txhm-detail .issues td.tx_heatmap_period,
+.txhm-detail .issues td.tx_heatmap_md {
+  white-space: nowrap;
+}
+
+@media (max-width: 760px) {
+  .txhm-toolbar {
+    align-items: stretch;
+    display: grid;
+  }
+
+  .txhm-toolbar label {
+    justify-content: space-between;
+  }
+}
