@@ -17,6 +17,21 @@ module RedmineTxHeatmap
       false
     end
 
+    def self.bulk_approve!(ids, batch_size: 50)
+      result = { :approved_count => 0, :failed => [] }
+      pending.where(:id => ids).find_each(:batch_size => batch_size) do |candidate|
+        candidate.approve!
+        result[:approved_count] += 1
+      rescue StandardError => e
+        Rails.logger.error(
+          "[redmine_tx_heatmap] failed to approve estimation candidate ##{candidate.id}: #{e.class}: #{e.message}"
+        )
+        result[:failed] << { :id => candidate.id, :error => "#{e.class}: #{e.message}" }
+      end
+
+      result
+    end
+
     def signature_attributes
       EstimationRule.signature_attributes(attributes)
     end

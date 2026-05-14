@@ -88,18 +88,24 @@ class HeatmapEstimationRulesController < ApplicationController
 
   def bulk_approve
     ids = Array(params[:candidate_ids]).map(&:to_i).select(&:positive?).uniq
-    candidates = RedmineTxHeatmap::EstimationCandidate.pending.where(:id => ids).to_a
+    pending_count = RedmineTxHeatmap::EstimationCandidate.pending.where(:id => ids).count
 
-    if candidates.empty?
+    if pending_count.zero?
       flash[:error] = '승인할 대기 후보를 선택하세요.'
       return redirect_to candidates_redirect_options
     end
 
-    RedmineTxHeatmap::EstimationCandidate.transaction do
-      candidates.each(&:approve!)
+    result = RedmineTxHeatmap::EstimationCandidate.bulk_approve!(ids)
+    if result[:failed].any?
+      failed_ids = result[:failed].first(5).map { |failure| "##{failure[:id]}" }.join(', ')
+      flash[:error] = "MD 추정 후보 #{result[:approved_count]}건을 승인했고 #{result[:failed].length}건은 실패했습니다. 실패: #{failed_ids}"
+    else
+      flash[:notice] = "MD 추정 후보 #{result[:approved_count]}건을 승인했습니다."
     end
-
-    flash[:notice] = "MD 추정 후보 #{candidates.length}건을 승인했습니다."
+    redirect_to candidates_redirect_options
+  rescue StandardError => e
+    Rails.logger.error("[redmine_tx_heatmap] bulk approve failed: #{e.class}: #{e.message}\n#{e.backtrace.first(20).join("\n")}")
+    flash[:error] = "MD 추정 후보 일괄 승인에 실패했습니다: #{e.class}: #{e.message}"
     redirect_to candidates_redirect_options
   end
 
