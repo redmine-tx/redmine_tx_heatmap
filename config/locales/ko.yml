@@ -1,5 +1,7 @@
 ko:
   project_module_redmine_tx_heatmap: 팀별 히트맵
   permission_view_heatmap: 팀별 히트맵 보기
+  field_worker: 작업자
   field_tx_heatmap_period: 기간
   field_tx_heatmap_md: MD
+  field_tx_heatmap_source: MD 출처

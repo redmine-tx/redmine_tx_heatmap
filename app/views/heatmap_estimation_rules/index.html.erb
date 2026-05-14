@@ -1,0 +1,71 @@
+<h2>MD 추정 규칙</h2>
+
+<div class="contextual">
+  <%= link_to '추정 후보', url_for(:controller => 'heatmap_estimation_rules', :action => 'candidates'), :class => 'icon icon-magnifier' %>
+</div>
+
+<% if @rules.empty? %>
+  <p class="nodata">승인된 MD 추정 규칙이 없습니다.</p>
+<% else %>
+  <% @rules.each do |rule| %>
+    <div class="box tabular">
+      <%= form_tag url_for(:controller => 'heatmap_estimation_rules', :action => 'update', :id => rule), :method => :patch do %>
+        <h3>#<%= rule.id %> <%= rule.enabled? ? '사용' : '미사용' %></h3>
+        <p>
+          <label>우선순위</label>
+          <%= number_field_tag 'rule[priority]', rule.priority, :style => 'width: 5em;' %>
+        </p>
+        <p>
+          <label>팀 / 트래커</label>
+          <%= @groups_by_id[rule.owner_group_id].try(:name) || rule.owner_group_id || '전체' %>
+          /
+          <%= @trackers_by_id[rule.tracker_id].try(:name) || rule.tracker_id || '전체' %>
+        </p>
+        <p>
+          <label>범주</label>
+          <%= text_field_tag 'rule[category_name_key]', rule.category_name_key, :size => 24 %>
+          <%= text_field_tag 'rule[category_label]', rule.category_label, :size => 24, :placeholder => '표시명' %>
+        </p>
+        <p>
+          <label>Prefix</label>
+          <%= text_field_tag 'rule[prefix_signature]', rule.prefix_signature, :size => 60 %>
+        </p>
+        <p>
+          <label>Template</label>
+          <%= text_area_tag 'rule[title_template]', rule.title_template, :rows => 2, :cols => 80 %>
+        </p>
+        <p>
+          <label>Stage</label>
+          <%= text_field_tag 'rule[stage_token]', rule.stage_token, :size => 40 %>
+        </p>
+        <p>
+          <label>MD / 신뢰도</label>
+          <%= number_field_tag 'rule[md]', rule.md, :min => 0, :step => 0.25, :style => 'width: 6em;' %>
+          <%= text_field_tag 'rule[confidence]', rule.confidence, :size => 12 %>
+        </p>
+        <p>
+          <label>근거</label>
+          <%= rule.source %>
+          <% if rule.sample_count.present? %>
+            / <%= rule.sample_count %> samples
+          <% end %>
+          <% if rule.spread.present? %>
+            / IQR <%= number_with_precision(rule.spread, :precision => 2) %>
+          <% end %>
+        </p>
+        <p>
+          <label>메모</label>
+          <%= text_area_tag 'rule[note]', rule.note, :rows => 2, :cols => 80 %>
+        </p>
+        <p class="buttons">
+          <%= submit_tag '저장' %>
+          <% if rule.enabled? %>
+            <%= link_to '비활성화', url_for(:controller => 'heatmap_estimation_rules', :action => 'disable', :id => rule), :method => :post, :class => 'icon icon-del' %>
+          <% else %>
+            <%= link_to '활성화', url_for(:controller => 'heatmap_estimation_rules', :action => 'enable', :id => rule), :method => :post, :class => 'icon icon-checked' %>
+          <% end %>
+        </p>
+      <% end %>
+    </div>
+  <% end %>
+<% end %>

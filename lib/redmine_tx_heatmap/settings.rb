@@ -79,25 +79,8 @@ module RedmineTxHeatmap
       float_value(@raw['overtime_multiplier'], 1.25, 1.0, 3.0)
     end
 
-    def estimate_rules
-      rules = @raw['estimate_rules'] || []
-      rules = rules.values if rules.is_a?(Hash)
-
-      Array(rules).filter_map do |rule|
-        next unless rule.is_a?(Hash)
-        next unless truthy?(rule['enabled'], true)
-
-        pattern = rule['pattern'].to_s.strip
-        md = safe_float(rule['md'])
-        next if pattern.blank? || md.nil? || md <= 0
-
-        {
-          :pattern => pattern,
-          :md => md,
-          :group_id => normalize_optional_id(rule['group_id']),
-          :category_id => normalize_optional_id(rule['category_id'])
-        }
-      end
+    def hours_per_md
+      float_value(@raw['hours_per_md'], 8.0, 0.25, 24.0)
     end
 
     def digest
@@ -119,13 +102,6 @@ module RedmineTxHeatmap
 
     def normalize_ids(value)
       Array(value).flatten.map { |item| item.to_s.strip }.reject(&:blank?).map(&:to_i).uniq
-    end
-
-    def normalize_optional_id(value)
-      text = value.to_s.strip
-      return nil if text.blank?
-
-      text.to_i
     end
 
     def integer_value(value, default, min, max)

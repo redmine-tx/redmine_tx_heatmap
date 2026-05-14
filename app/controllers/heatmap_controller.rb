@@ -62,7 +62,8 @@ class HeatmapController < ApplicationController
       RedmineTxHeatmap::Calendar.period_key(@start_period, @period_unit),
       RedmineTxHeatmap::Calendar.period_key(@end_period, @period_unit),
       @include_subprojects ? 'with-subprojects' : 'project-only',
-      @settings.digest
+      @settings.digest,
+      RedmineTxHeatmap::EstimationRule.digest
     ].join(':')
 
     Rails.cache.delete(cache_key) if params[:force] == 'true'
@@ -153,8 +154,14 @@ class HeatmapController < ApplicationController
     return {} if ids.empty?
 
     Issue.visible
-         .includes(:assigned_to, :fixed_version, :priority, :project, :status, :tracker)
+         .includes(*heatmap_issue_preload_associations)
          .where(:id => ids)
          .index_by(&:id)
+  end
+
+  def heatmap_issue_preload_associations
+    associations = [:assigned_to, :fixed_version, :priority, :project, :status, :tracker]
+    associations << :worker if Issue.reflect_on_association(:worker)
+    associations
   end
 end

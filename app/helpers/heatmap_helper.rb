@@ -1,5 +1,5 @@
 module HeatmapHelper
-  HEATMAP_ISSUE_COLUMNS = [:id, :subject, :assigned_to, :fixed_version, :tx_heatmap_period, :tx_heatmap_md].freeze
+  HEATMAP_ISSUE_COLUMNS = [:id, :subject, :worker, :fixed_version, :tx_heatmap_period, :tx_heatmap_md, :tx_heatmap_source].freeze
 
   def heatmap_issue_columns
     HEATMAP_ISSUE_COLUMNS
@@ -14,11 +14,13 @@ module HeatmapHelper
 
       values[issue.id] = {
         :tx_heatmap_period => heatmap_period_label(entry),
-        :tx_heatmap_md => heatmap_md_label(entry)
+        :tx_heatmap_md => heatmap_md_label(entry),
+        :tx_heatmap_source => heatmap_source_label(entry)
       }
       sort_values[issue.id] = {
         :tx_heatmap_period => heatmap_period_sort_value(entry),
-        :tx_heatmap_md => heatmap_md_sort_value(entry)
+        :tx_heatmap_md => heatmap_md_sort_value(entry),
+        :tx_heatmap_source => heatmap_source_sort_value(entry)
       }
       issue
     end
@@ -68,5 +70,30 @@ module HeatmapHelper
   def heatmap_md_sort_value(entry)
     md = entry[:md] || entry['md']
     md.present? ? md.to_f : -1
+  end
+
+  def heatmap_source_label(entry)
+    source = entry[:source] || entry['source'] || 'unknown'
+    confidence = entry[:confidence] || entry['confidence']
+    rule_id = entry[:rule_id] || entry['rule_id']
+    explanation = entry[:explanation] || entry['explanation']
+
+    label = case source.to_s
+            when 'estimated_hours'
+              'estimated_hours'
+            when 'approved_rule'
+              rule_id.present? ? "approved_rule ##{rule_id}" : 'approved_rule'
+            when 'date_range'
+              'date_range'
+            else
+              'unknown'
+            end
+    label += " / #{confidence}" if confidence.present?
+    label += " / #{explanation}" if explanation.present?
+    label
+  end
+
+  def heatmap_source_sort_value(entry)
+    (entry[:source] || entry['source']).to_s
   end
 end

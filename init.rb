@@ -25,7 +25,7 @@ Redmine::Plugin.register :redmine_tx_heatmap do
     :default => {
       'target_group_ids' => [],
       'excluded_user_ids_by_group' => {},
-      'estimate_rules' => [],
+      'hours_per_md' => '8.0',
       'include_subprojects' => '0',
       'default_period_unit' => 'week',
       'default_months' => '12',
@@ -40,5 +40,14 @@ end
 Rails.application.config.after_initialize do
   require_dependency File.expand_path('lib/redmine_tx_heatmap/settings', __dir__)
   require_dependency File.expand_path('lib/redmine_tx_heatmap/calendar', __dir__)
+  require_dependency File.expand_path('lib/redmine_tx_heatmap/issue_filters', __dir__)
+  require_dependency File.expand_path('lib/redmine_tx_heatmap/estimate_result', __dir__)
+  require_dependency File.expand_path('lib/redmine_tx_heatmap/issue_signature', __dir__)
+  require_dependency File.expand_path('lib/redmine_tx_heatmap/title_template_miner', __dir__)
+  require_dependency File.expand_path('app/models/redmine_tx_heatmap/estimation_rule', __dir__)
+  require_dependency File.expand_path('app/models/redmine_tx_heatmap/estimation_candidate', __dir__)
+  require_dependency File.expand_path('lib/redmine_tx_heatmap/team_resolver', __dir__)
+  require_dependency File.expand_path('lib/redmine_tx_heatmap/issue_estimator', __dir__)
+  require_dependency File.expand_path('lib/redmine_tx_heatmap/estimation_candidate_builder', __dir__)
   require_dependency File.expand_path('lib/redmine_tx_heatmap/heatmap_service', __dir__)
 end

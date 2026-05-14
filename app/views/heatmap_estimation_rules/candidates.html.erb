@@ -1,0 +1,119 @@
+<h2>MD 추정 후보</h2>
+
+<div class="contextual">
+  <%= link_to '승인 규칙', url_for(:controller => 'heatmap_estimation_rules', :action => 'index'), :class => 'icon icon-settings' %>
+</div>
+
+<div class="box tabular">
+  <%= form_tag url_for(:controller => 'heatmap_estimation_rules', :action => 'rebuild'), :method => :post do %>
+    <p>
+      <label>최소 샘플 수</label>
+      <%= number_field_tag :min_samples, RedmineTxHeatmap::EstimationCandidateBuilder::DEFAULT_MIN_SAMPLES, :min => 2, :style => 'width: 5em;' %>
+      <%= submit_tag '최근 24개월 후보 재생성' %>
+    </p>
+    <p class="info">기존 미승인 후보를 삭제한 뒤, 종료된 일감 중 estimated_hours가 있는 항목으로 다시 생성합니다. 승인된 규칙은 유지되며, 새 후보는 승인 전까지 히트맵에 반영되지 않습니다.</p>
+  <% end %>
+</div>
+
+<p>
+  상태:
+  <%= link_to '대기', url_for(:controller => 'heatmap_estimation_rules', :action => 'candidates', :status => 'pending') %>
+  |
+  <%= link_to '승인', url_for(:controller => 'heatmap_estimation_rules', :action => 'candidates', :status => 'approved') %>
+  |
+  <%= link_to '거절', url_for(:controller => 'heatmap_estimation_rules', :action => 'candidates', :status => 'rejected') %>
+  |
+  <%= link_to '전체', url_for(:controller => 'heatmap_estimation_rules', :action => 'candidates', :status => 'all') %>
+  <% if @status == 'pending' %>
+    |
+    <% if @hide_low %>
+      <%= link_to 'low 포함', url_for(:controller => 'heatmap_estimation_rules', :action => 'candidates', :status => 'pending') %>
+    <% else %>
+      <%= link_to 'low 숨기기', url_for(:controller => 'heatmap_estimation_rules', :action => 'candidates', :status => 'pending', :hide_low => '1') %>
+    <% end %>
+  <% end %>
+</p>
+
+<% if @candidates.empty? %>
+  <p class="nodata">표시할 MD 추정 후보가 없습니다.</p>
+<% else %>
+  <%= form_tag url_for(:controller => 'heatmap_estimation_rules', :action => 'bulk_approve'), :method => :post do %>
+    <%= hidden_field_tag :status, @status %>
+    <%= hidden_field_tag :hide_low, '1' if @hide_low %>
+    <p class="buttons">
+      <%= submit_tag '선택 후보 승인' %>
+    </p>
+    <table class="list">
+      <thead>
+        <tr>
+          <th>
+            <%= check_box_tag 'check_all_candidates', '1', false, :onclick => "document.querySelectorAll('.txhm-candidate-checkbox').forEach(function(box) { box.checked = this.checked; }, this)" %>
+          </th>
+          <th>ID</th>
+          <th>상태</th>
+          <th>조건</th>
+          <th>Median</th>
+          <th>Samples</th>
+          <th>IQR/Median</th>
+          <th>신뢰도</th>
+          <th>대표 일감</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        <% @candidates.each do |candidate| %>
+          <tr class="<%= cycle('odd', 'even') %>">
+            <td>
+              <% if candidate.status == 'pending' %>
+                <%= check_box_tag 'candidate_ids[]', candidate.id, false, :class => 'txhm-candidate-checkbox' %>
+              <% end %>
+            </td>
+            <td><%= candidate.id %></td>
+            <td><%= candidate.status %></td>
+            <td>
+              <strong><%= @groups_by_id[candidate.owner_group_id].try(:name) || candidate.owner_group_id || '전체' %></strong>
+              /
+              <%= @trackers_by_id[candidate.tracker_id].try(:name) || candidate.tracker_id || '전체' %>
+              /
+              <%= candidate.category_label.presence || candidate.category_name_key || '전체' %>
+              <% if candidate.prefix_signature.present? %>
+                <br>Prefix: <%= candidate.prefix_signature %>
+              <% end %>
+              <% if candidate.stage_token.present? %>
+                <br>Stage: <%= candidate.stage_token %>
+              <% end %>
+              <% if candidate.title_template.present? %>
+                <br>Template: <%= candidate.title_template %>
+              <% end %>
+            </td>
+            <td><%= number_with_precision(candidate.median_md, :precision => 2, :strip_insignificant_zeros => true) %> MD</td>
+            <td><%= candidate.sample_count %></td>
+            <td><%= number_with_precision(candidate.dispersion, :precision => 2, :strip_insignificant_zeros => true) %></td>
+            <td><%= candidate.confidence %></td>
+            <td>
+              <% candidate.example_ids.each do |issue_id| %>
+                <% issue = @issues_by_id[issue_id.to_i] %>
+                <% if issue %>
+                  <%= link_to "##{issue.id}", issue_path(issue), :data => { :issue_tooltip => issue.id } %>
+                <% else %>
+                  #<%= issue_id %>
+                <% end %>
+              <% end %>
+            </td>
+            <td class="buttons">
+              <% if candidate.status == 'pending' %>
+                <%= link_to '승인', url_for(:controller => 'heatmap_estimation_rules', :action => 'approve', :id => candidate), :method => :post %>
+                <%= link_to '거절', url_for(:controller => 'heatmap_estimation_rules', :action => 'reject', :id => candidate), :method => :post %>
+              <% else %>
+                -
+              <% end %>
+            </td>
+          </tr>
+        <% end %>
+      </tbody>
+    </table>
+    <p class="buttons">
+      <%= submit_tag '선택 후보 승인' %>
+    </p>
+  <% end %>
+<% end %>

@@ -1,5 +1,7 @@
 en:
   project_module_redmine_tx_heatmap: Team heatmap
   permission_view_heatmap: View team heatmap
+  field_worker: Worker
   field_tx_heatmap_period: Period
   field_tx_heatmap_md: MD
+  field_tx_heatmap_source: MD source

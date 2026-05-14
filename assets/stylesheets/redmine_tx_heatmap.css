@@ -278,7 +278,8 @@ table.list.txhm-table td.txhm-members {
 }
 
 .txhm-detail .issues td.tx_heatmap_period,
-.txhm-detail .issues td.tx_heatmap_md {
+.txhm-detail .issues td.tx_heatmap_md,
+.txhm-detail .issues td.tx_heatmap_source {
   white-space: nowrap;
 }
 

@@ -1,7 +1,5 @@
 module RedmineTxHeatmap
   class HeatmapService
-    HOURS_PER_MD = 8.0
-
     def initialize(project:, include_subprojects:, settings:, start_period: nil, end_period: nil, period_unit: 'week', start_month: nil, end_month: nil)
       @project = project
       @period_unit = Calendar.normalize_period_unit(period_unit)
@@ -14,7 +12,8 @@ module RedmineTxHeatmap
       @period_end = @periods.last[:end_date]
       @holidays = Calendar.holiday_map(@period_start, @period_end)
       @current_period_key = current_period_key
-      @estimate_rules = @settings.estimate_rules
+      @issue_estimator = IssueEstimator.new(settings: @settings)
+      @team_resolver = TeamResolver.new(settings: @settings)
     end
 
     def call
@@ -116,12 +115,12 @@ module RedmineTxHeatmap
 
     def issue_scope
       scope = Issue.visible
-                   .includes(:assigned_to, :category, :fixed_version, :project, :status, :tracker)
+                   .includes(*issue_preload_associations)
                    .left_outer_joins(:fixed_version)
                    .where(:project_id => project_ids)
 
-      discarded_ids = IssueStatus.respond_to?(:discarded_ids) ? IssueStatus.discarded_ids : []
-      scope = scope.where.not(:status_id => discarded_ids) if discarded_ids.any?
+      scope = IssueFilters.exclude_discarded(scope)
+      scope = IssueFilters.exclude_bug_trackers(scope)
 
       clauses = []
       params = []
@@ -129,12 +128,14 @@ module RedmineTxHeatmap
       clauses << '(issues.start_date IS NOT NULL AND issues.due_date IS NOT NULL AND issues.start_date <= ? AND issues.due_date >= ?)'
       params << @period_end << @period_start
 
-      clauses << '(issues.start_date IS NULL AND issues.due_date IS NULL AND versions.effective_date BETWEEN ? AND ?)'
-      params << @period_start << @period_end
+      clauses << '(issues.start_date IS NULL AND issues.due_date IS NULL AND versions.effective_date >= ?)'
+      params << @period_start
 
-      if @current_period_key
-        clauses << '((issues.start_date IS NULL AND issues.due_date IS NOT NULL) OR (issues.start_date IS NOT NULL AND issues.due_date IS NULL))'
-      end
+      clauses << '(issues.start_date IS NOT NULL AND issues.due_date IS NULL AND issues.start_date <= ?)'
+      params << @period_end
+
+      clauses << '(issues.start_date IS NULL AND issues.due_date IS NOT NULL AND issues.due_date >= ?)'
+      params << @period_start
 
       scope.where([clauses.join(' OR '), *params])
     end
@@ -146,18 +147,14 @@ module RedmineTxHeatmap
     end
 
     def group_id_for_issue(issue)
-      assigned_to = issue.assigned_to
-      return assigned_to.id if assigned_to.is_a?(Group) && @group_ids.include?(assigned_to.id)
-      return @user_group_id[assigned_to.id] if assigned_to.is_a?(User)
-
-      nil
+      @team_resolver.planned_owner_group_id(issue)
     end
 
     def member_row_for_issue(issue, group_id)
-      assigned_to = issue.assigned_to
-      return nil unless group_id && assigned_to.is_a?(User)
+      worker_id = @team_resolver.worker_id_for_issue(issue)
+      return nil unless group_id && worker_id
 
-      @member_rows[[group_id, assigned_to.id]]
+      @member_rows[[group_id, worker_id]]
     end
 
     def aggregate_issue_to_row(row, issue)
@@ -180,7 +177,32 @@ module RedmineTxHeatmap
 
     def aggregate_full_date_issue(row, issue)
       date_from, date_to = [issue.start_date, issue.due_date].minmax
-      Calendar.business_days_by_period(date_from, date_to, @periods, @holidays).each do |period_key, days|
+      days_by_period = Calendar.business_days_by_period(date_from, date_to, @periods, @holidays)
+      return if days_by_period.empty?
+
+      estimate = estimated_md(issue, row[:group_id])
+      if estimate.md
+        distribute_dated_estimate(row, issue, days_by_period, estimate)
+      else
+        distribute_date_range_days(row, issue, days_by_period)
+      end
+    end
+
+    def distribute_dated_estimate(row, issue, days_by_period, estimate)
+      total_days = days_by_period.values.sum.to_f
+      return unless total_days.positive?
+
+      days_by_period.each do |period_key, days|
+        cell = row[:periods][period_key]
+        next unless cell
+
+        period_md = estimate.md.to_f * (days.to_f / total_days)
+        add_issue_to_period(row, cell, issue, period_md, estimate.source, estimate)
+      end
+    end
+
+    def distribute_date_range_days(row, issue, days_by_period)
+      days_by_period.each do |period_key, days|
         cell = row[:periods][period_key]
         next unless cell
 
@@ -189,18 +211,24 @@ module RedmineTxHeatmap
     end
 
     def aggregate_one_sided_issue(row, issue)
-      return unless @current_period_key
-
-      cell = row[:periods][@current_period_key]
-      return unless cell
-
-      md, source = estimated_md(issue, row[:group_id])
-      add_issue_to_period(row, cell, issue, md, source || 'unknown')
+      estimate = estimated_md(issue, row[:group_id])
+      if issue.start_date.present?
+        aggregate_anchored_issue(row, issue, issue.start_date, :forward, estimate)
+      else
+        aggregate_anchored_issue(row, issue, issue.due_date, :backward, estimate)
+      end
     end
 
     def aggregate_undated_issue(row, issue)
-      md, source = estimated_md(issue, row[:group_id])
-      entry = issue_entry(issue, md, source || 'unknown')
+      assumed_due_date = assumed_due_date_for_issue(issue)
+      if assumed_due_date
+        estimate = estimated_md(issue, row[:group_id])
+        return aggregate_anchored_issue(row, issue, assumed_due_date, :backward, estimate)
+      end
+
+      estimate = estimated_md(issue, row[:group_id])
+      md = estimate.md
+      entry = issue_entry(issue, md, estimate.source || 'unknown', estimate)
 
       if md
         row[:undated_md] += md
@@ -213,8 +241,8 @@ module RedmineTxHeatmap
       row[:undated_issues] << entry
     end
 
-    def add_issue_to_period(row, cell, issue, md, source)
-      entry = issue_entry(issue, md, source)
+    def add_issue_to_period(row, cell, issue, md, source, estimate = nil)
+      entry = issue_entry(issue, md, source, estimate)
 
       if md
         cell[:md] += md
@@ -228,46 +256,122 @@ module RedmineTxHeatmap
     end
 
     def estimated_md(issue, group_id)
-      hours = issue.estimated_hours.to_f
-      return [hours / HOURS_PER_MD, 'estimated_hours'] if hours > 0
-
-      rule = matching_estimate_rule(issue, group_id)
-      return [rule[:md], 'regex_rule'] if rule
-
-      [nil, nil]
+      @issue_estimator.estimate(issue, owner_group_id: group_id)
     end
 
-    def matching_estimate_rule(issue, group_id)
-      subject = issue.subject.to_s
-      category_id = issue.category_id
+    def aggregate_anchored_issue(row, issue, anchor_date, direction, estimate)
+      return unless anchor_date
 
-      @estimate_rules.find do |rule|
-        next false if rule[:group_id] && rule[:group_id] != group_id
-        next false if rule[:category_id] && rule[:category_id] != category_id
-
-        begin
-          Regexp.new(rule[:pattern], Regexp::IGNORECASE).match?(subject)
-        rescue RegexpError
-          false
-        end
+      md = estimate.md
+      if md
+        distribute_anchored_issue(row, issue, md.to_f, anchor_date, direction, estimate.source || 'unknown', estimate)
+      else
+        add_unknown_anchored_issue(row, issue, anchor_date, estimate)
       end
     end
 
-    def issue_entry(issue, md, source)
+    def distribute_anchored_issue(row, issue, md, anchor_date, direction, source, estimate)
+      business_days_by_period = anchored_business_days_by_period(anchor_date, md, direction)
+      return if business_days_by_period.empty?
+
+      business_days_by_period.each do |period_key, period_md|
+        cell = row[:periods][period_key]
+        next unless cell
+
+        add_issue_to_period(row, cell, issue, period_md, source, estimate)
+      end
+    end
+
+    def add_unknown_anchored_issue(row, issue, anchor_date, estimate)
+      period_key = anchored_period_key(anchor_date)
+      return unless period_key
+
+      cell = row[:periods][period_key]
+      return unless cell
+
+      add_issue_to_period(row, cell, issue, nil, 'unknown', estimate)
+    end
+
+    def anchored_business_days_by_period(anchor_date, md, direction)
+      md = md.to_f
+      return {} unless md.positive?
+
+      totals = Hash.new(0.0)
+      remaining = md
+
+      cursor = anchor_date
+      while remaining.positive? && cursor_within_period_window?(cursor, direction)
+        if business_day_on?(cursor)
+          portion = [remaining, 1.0].min
+          add_anchored_md_to_totals(totals, cursor, portion)
+          remaining -= portion
+        end
+        cursor += direction == :forward ? 1 : -1
+      end
+
+      totals
+    end
+
+    def add_anchored_md_to_totals(totals, date, md)
+      return unless date >= @period_start && date <= @period_end
+
+      totals[Calendar.period_key(date, @period_unit)] += md
+    end
+
+    def anchored_period_key(anchor_date)
+      return nil unless anchor_date
+      return nil if anchor_date < @period_start || anchor_date > @period_end
+
+      Calendar.period_key(anchor_date, @period_unit)
+    end
+
+    def cursor_within_period_window?(date, direction)
+      direction == :forward ? date <= @period_end : date >= @period_start
+    end
+
+    def assumed_due_date_for_issue(issue)
+      issue.fixed_version.try(:effective_date)
+    end
+
+    def holiday_lookup
+      @holiday_lookup ||= {}
+    end
+
+    def ensure_holidays_for_year(year)
+      @holiday_years ||= {}
+      return if @holiday_years[year]
+
+      start_date = Date.new(year, 1, 1)
+      end_date = Date.new(year, 12, 31)
+      holiday_lookup.merge!(Calendar.holiday_map(start_date, end_date))
+      @holiday_years[year] = true
+    end
+
+    def business_day_on?(date)
+      ensure_holidays_for_year(date.year)
+      return false if date.saturday? || date.sunday?
+
+      !holiday_lookup.key?(date)
+    end
+
+    def issue_entry(issue, md, source, estimate = nil)
       {
         :id => issue.id,
         :subject => issue.subject,
         :project => issue.project.try(:name),
         :tracker => issue.tracker.try(:name),
         :status => issue.status.try(:name),
-        :assignee => issue.assigned_to.try(:name),
+        :worker => display_worker_for_issue(issue).try(:name),
         :category => issue.category.try(:name),
         :fixed_version => issue.fixed_version.try(:name),
         :start_date => issue.start_date,
         :due_date => issue.due_date,
         :estimated_hours => issue.estimated_hours,
         :md => md,
-        :source => source
+        :source => source,
+        :confidence => estimate.try(:confidence),
+        :rule_id => estimate.try(:rule_id),
+        :explanation => estimate.try(:explanation)
       }
     end
 
@@ -302,6 +406,17 @@ module RedmineTxHeatmap
       return nil unless today >= @period_start && today <= @period_end
 
       Calendar.period_key(today, @period_unit)
+    end
+
+    def issue_preload_associations
+      associations = [:assigned_to, :category, :fixed_version, :project, :status, :tracker]
+      associations << :worker if Issue.reflect_on_association(:worker)
+      associations
+    end
+
+    def display_worker_for_issue(issue)
+      worker = issue.worker if issue.respond_to?(:worker)
+      worker || issue.assigned_to
     end
   end
 end

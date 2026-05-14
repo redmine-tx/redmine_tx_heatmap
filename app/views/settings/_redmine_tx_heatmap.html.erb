@@ -1,12 +1,6 @@
 <%
   settings ||= {}
   heatmap_settings = RedmineTxHeatmap::Settings.new(settings)
-  groups = Group.sorted.to_a
-  categories = IssueCategory.order(:name).to_a
-  rules = settings['estimate_rules'] || []
-  rules = rules.values if rules.is_a?(Hash)
-  rules = Array(rules)
-  rules += Array.new([5 - rules.length, 0].max) { {} }
 %>
 
 <fieldset class="box">
@@ -42,6 +36,10 @@
     <%= check_box_tag 'settings[show_unmapped]', '1', heatmap_settings.show_unmapped? %>
   </p>
   <p>
+    <label>1 MD 기준 시간</label>
+    <%= number_field_tag 'settings[hours_per_md]', heatmap_settings.hours_per_md, :min => 0.25, :max => 24, :step => 0.25, :style => 'width: 7em;' %>
+  </p>
+  <p>
     <label>기본 표시 단위</label>
     <%= select_tag 'settings[default_period_unit]',
                    options_for_select([['주 단위', 'week'], ['월 단위', 'month']], heatmap_settings.default_period_unit) %>
@@ -52,42 +50,10 @@
 </fieldset>
 
 <fieldset class="box">
-  <legend>정규표현식 MD 산정 규칙</legend>
-  <p class="info">estimated_hours가 없는 일감에만 적용됩니다. 제목을 정규표현식으로 검사하며, 그룹과 범주는 선택 제한 조건입니다.</p>
-  <table class="list">
-    <thead>
-      <tr>
-        <th>사용</th>
-        <th>제목 정규표현식</th>
-        <th>MD</th>
-        <th>그룹 제한</th>
-        <th>범주 제한</th>
-      </tr>
-    </thead>
-    <tbody>
-      <% rules.each_with_index do |rule, index| %>
-        <% rule = rule.is_a?(Hash) ? rule : {} %>
-        <tr>
-          <td>
-            <%= select_tag "settings[estimate_rules][#{index}][enabled]",
-                           options_for_select([['사용', '1'], ['미사용', '0']], rule.fetch('enabled', '1').to_s) %>
-          </td>
-          <td>
-            <%= text_field_tag "settings[estimate_rules][#{index}][pattern]", rule['pattern'], :size => 40 %>
-          </td>
-          <td>
-            <%= number_field_tag "settings[estimate_rules][#{index}][md]", rule['md'], :min => 0, :step => 0.25, :style => 'width: 7em;' %>
-          </td>
-          <td>
-            <%= select_tag "settings[estimate_rules][#{index}][group_id]",
-                           options_for_select([['전체', '']] + groups.map { |group| [group.name, group.id] }, rule['group_id'].to_s) %>
-          </td>
-          <td>
-            <%= select_tag "settings[estimate_rules][#{index}][category_id]",
-                           options_for_select([['전체', '']] + categories.map { |category| [category.name, category.id] }, rule['category_id'].to_s) %>
-          </td>
-        </tr>
-      <% end %>
-    </tbody>
-  </table>
+  <legend>DB 기반 MD 추정 규칙</legend>
+  <p class="info">estimated_hours가 없는 일감에는 승인된 MD 추정 규칙만 적용됩니다. 후보는 과거 종료 일감의 estimated_hours에서 생성되고, 승인 전에는 히트맵에 반영되지 않습니다.</p>
+  <p>
+    <%= link_to 'MD 추정 규칙 관리', url_for(:controller => 'heatmap_estimation_rules', :action => 'index'), :class => 'icon icon-settings' %>
+    <%= link_to 'MD 추정 후보 검토', url_for(:controller => 'heatmap_estimation_rules', :action => 'candidates'), :class => 'icon icon-magnifier' %>
+  </p>
 </fieldset>
