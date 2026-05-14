@@ -30,7 +30,7 @@ class TitleTemplateMinerTest < Minitest::Test
     templates = RedmineTxHeatmap::TitleTemplateMiner.templates_for(subjects, :min_samples => 5)
     assert_includes(
       templates.map { |entry| entry[:template] },
-      '{slot} 포트 일러스트 1차 원본 {slot}'
+      '{slot} 포트 일러스트 {slot}'
     )
   end
 end

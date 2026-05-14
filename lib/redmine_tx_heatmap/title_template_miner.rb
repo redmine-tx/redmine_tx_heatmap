@@ -10,7 +10,7 @@ module RedmineTxHeatmap
     end
 
     def initialize(subjects)
-      @subjects = Array(subjects).map { |subject| IssueSignature.normalize_text(subject) }
+      @subjects = Array(subjects).map { |subject| IssueSignature.title_template(subject) || IssueSignature.normalize_text(subject) }
       @token_sequences = @subjects.map { |subject| IssueSignature.body_tokens_for_template(subject) }
     end
 

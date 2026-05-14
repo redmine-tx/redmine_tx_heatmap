@@ -77,11 +77,15 @@ module RedmineTxHeatmap
       text = slot_parenthesized_numeric_identifier(text)
       text = text.gsub(/"[^"]+"|'[^']+'/, '{slot}')
       text = text.gsub(/\b\d{4}[-.\/]\d{1,2}[-.\/]\d{1,2}\b/, '{slot}')
-      text = text.gsub(/\b\d+(?:\.\d+)?\b/, '{slot}')
+      text = slot_numeric_fragments(text)
       text = text.gsub(/\b[A-Z]+-\d+\b/i, '{slot}')
       text = text.gsub(/\b[0-9a-f]{7,}\b/i, '{slot}')
       text = text.gsub(/(?:\{slot\}\s*){2,}/, '{slot}')
       text.strip.presence
+    end
+
+    def slot_numeric_fragments(text)
+      text.gsub(/\d+(?:\.\d+)?/, '{slot}')
     end
 
     def slot_parenthesized_numeric_identifier(text)

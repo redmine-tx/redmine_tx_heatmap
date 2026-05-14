@@ -1,12 +1,35 @@
 class HeatmapEstimationRulesController < ApplicationController
   layout 'admin'
 
+  RULE_SORTS = {
+    'id' => [:id],
+    'enabled' => [:enabled, :id],
+    'priority' => [:priority, :id],
+    'condition' => [:owner_group_id, :tracker_id, :category_name_key, :prefix_signature, :title_template, :id],
+    'md' => [:md, :id],
+    'samples' => [:sample_count, :id],
+    'confidence' => [:confidence, :id],
+    'updated' => [:updated_at, :id]
+  }.freeze
+
+  CANDIDATE_SORTS = {
+    'id' => [:id],
+    'status' => [:status, :id],
+    'condition' => [:owner_group_id, :tracker_id, :category_name_key, :prefix_signature, :title_template, :id],
+    'median' => [:median_md, :id],
+    'samples' => [:sample_count, :id],
+    'dispersion' => [:dispersion, :id],
+    'confidence' => [:confidence, :id]
+  }.freeze
+
   before_action :require_admin
   before_action :find_rule, :only => [:update, :enable, :disable]
   before_action :find_candidate, :only => [:approve, :reject]
+  helper_method :rule_sort_options, :candidate_sort_options, :candidates_redirect_options, :sort_indicator
 
   def index
-    @rules = RedmineTxHeatmap::EstimationRule.available? ? RedmineTxHeatmap::EstimationRule.order(:priority, :id).to_a : []
+    scope = RedmineTxHeatmap::EstimationRule.available? ? RedmineTxHeatmap::EstimationRule.all : RedmineTxHeatmap::EstimationRule.none
+    @rules = apply_sort(scope, RULE_SORTS, 'priority').to_a
     @groups_by_id = Group.where(:id => @rules.map(&:owner_group_id).compact).index_by(&:id)
     @trackers_by_id = Tracker.where(:id => @rules.map(&:tracker_id).compact).index_by(&:id)
   end
@@ -32,10 +55,10 @@ class HeatmapEstimationRulesController < ApplicationController
   def candidates
     @status = params[:status].presence || 'pending'
     @hide_low = params[:hide_low] == '1'
-    scope = RedmineTxHeatmap::EstimationCandidate.available? ? RedmineTxHeatmap::EstimationCandidate.order(:status, :confidence, :id) : RedmineTxHeatmap::EstimationCandidate.none
+    scope = RedmineTxHeatmap::EstimationCandidate.available? ? RedmineTxHeatmap::EstimationCandidate.all : RedmineTxHeatmap::EstimationCandidate.none
     scope = scope.where(:status => @status) if @status != 'all'
     scope = scope.where.not(:confidence => 'low') if @status == 'pending' && @hide_low
-    @candidates = scope.to_a
+    @candidates = apply_sort(scope, CANDIDATE_SORTS, 'id').to_a
     @groups_by_id = Group.where(:id => @candidates.map(&:owner_group_id).compact).index_by(&:id)
     @trackers_by_id = Tracker.where(:id => @candidates.map(&:tracker_id).compact).index_by(&:id)
     @issues_by_id = Issue.where(:id => @candidates.flat_map(&:example_ids).uniq).index_by(&:id)
@@ -99,7 +122,40 @@ class HeatmapEstimationRulesController < ApplicationController
   def candidates_redirect_options
     options = { :action => 'candidates', :status => params[:status].presence || 'pending' }
     options[:hide_low] = '1' if params[:hide_low] == '1'
+    options[:sort] = params[:sort] if params[:sort].present?
+    options[:direction] = params[:direction] if params[:direction].present?
     options
+  end
+
+  def apply_sort(scope, allowed_sorts, default_sort)
+    @sort_key = allowed_sorts.key?(params[:sort].to_s) ? params[:sort].to_s : default_sort
+    @sort_direction = params[:direction] == 'desc' ? 'desc' : 'asc'
+    order = allowed_sorts.fetch(@sort_key).each_with_object({}) do |column, memo|
+      memo[column] = @sort_direction.to_sym
+    end
+
+    scope.reorder(order)
+  end
+
+  def sort_options(sort_key)
+    direction = (@sort_key == sort_key && @sort_direction == 'asc') ? 'desc' : 'asc'
+    { :sort => sort_key, :direction => direction }
+  end
+
+  def rule_sort_options(sort_key)
+    { :action => 'index' }.merge(sort_options(sort_key))
+  end
+
+  def candidate_sort_options(sort_key)
+    options = { :action => 'candidates', :status => @status }.merge(sort_options(sort_key))
+    options[:hide_low] = '1' if @hide_low
+    options
+  end
+
+  def sort_indicator(sort_key)
+    return '' unless @sort_key == sort_key
+
+    @sort_direction == 'asc' ? ' ▲' : ' ▼'
   end
 
   def rule_params

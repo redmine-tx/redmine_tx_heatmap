@@ -40,6 +40,8 @@
   <%= form_tag url_for(:controller => 'heatmap_estimation_rules', :action => 'bulk_approve'), :method => :post do %>
     <%= hidden_field_tag :status, @status %>
     <%= hidden_field_tag :hide_low, '1' if @hide_low %>
+    <%= hidden_field_tag :sort, @sort_key %>
+    <%= hidden_field_tag :direction, @sort_direction %>
     <p class="buttons">
       <%= submit_tag '선택 후보 승인' %>
     </p>
@@ -49,13 +51,13 @@
           <th>
             <%= check_box_tag 'check_all_candidates', '1', false, :onclick => "document.querySelectorAll('.txhm-candidate-checkbox').forEach(function(box) { box.checked = this.checked; }, this)" %>
           </th>
-          <th>ID</th>
-          <th>상태</th>
-          <th>조건</th>
-          <th>Median</th>
-          <th>Samples</th>
-          <th>IQR/Median</th>
-          <th>신뢰도</th>
+          <th><%= link_to "ID#{sort_indicator('id')}", url_for(candidate_sort_options('id')) %></th>
+          <th><%= link_to "상태#{sort_indicator('status')}", url_for(candidate_sort_options('status')) %></th>
+          <th><%= link_to "조건#{sort_indicator('condition')}", url_for(candidate_sort_options('condition')) %></th>
+          <th><%= link_to "Median#{sort_indicator('median')}", url_for(candidate_sort_options('median')) %></th>
+          <th><%= link_to "Samples#{sort_indicator('samples')}", url_for(candidate_sort_options('samples')) %></th>
+          <th><%= link_to "IQR/Median#{sort_indicator('dispersion')}", url_for(candidate_sort_options('dispersion')) %></th>
+          <th><%= link_to "신뢰도#{sort_indicator('confidence')}", url_for(candidate_sort_options('confidence')) %></th>
           <th>대표 일감</th>
           <th></th>
         </tr>
@@ -102,8 +104,8 @@
             </td>
             <td class="buttons">
               <% if candidate.status == 'pending' %>
-                <%= link_to '승인', url_for(:controller => 'heatmap_estimation_rules', :action => 'approve', :id => candidate), :method => :post %>
-                <%= link_to '거절', url_for(:controller => 'heatmap_estimation_rules', :action => 'reject', :id => candidate), :method => :post %>
+                <%= link_to '승인', url_for(candidates_redirect_options.merge(:action => 'approve', :id => candidate)), :method => :post %>
+                <%= link_to '거절', url_for(candidates_redirect_options.merge(:action => 'reject', :id => candidate)), :method => :post %>
               <% else %>
                 -
               <% end %>

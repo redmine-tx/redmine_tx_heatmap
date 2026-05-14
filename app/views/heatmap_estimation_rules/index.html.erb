@@ -7,8 +7,49 @@
 <% if @rules.empty? %>
   <p class="nodata">승인된 MD 추정 규칙이 없습니다.</p>
 <% else %>
+  <table class="list">
+    <thead>
+      <tr>
+        <th><%= link_to "ID#{sort_indicator('id')}", url_for(rule_sort_options('id')) %></th>
+        <th><%= link_to "사용#{sort_indicator('enabled')}", url_for(rule_sort_options('enabled')) %></th>
+        <th><%= link_to "우선순위#{sort_indicator('priority')}", url_for(rule_sort_options('priority')) %></th>
+        <th><%= link_to "조건#{sort_indicator('condition')}", url_for(rule_sort_options('condition')) %></th>
+        <th><%= link_to "MD#{sort_indicator('md')}", url_for(rule_sort_options('md')) %></th>
+        <th><%= link_to "Samples#{sort_indicator('samples')}", url_for(rule_sort_options('samples')) %></th>
+        <th><%= link_to "신뢰도#{sort_indicator('confidence')}", url_for(rule_sort_options('confidence')) %></th>
+        <th><%= link_to "수정일#{sort_indicator('updated')}", url_for(rule_sort_options('updated')) %></th>
+      </tr>
+    </thead>
+    <tbody>
+      <% @rules.each do |rule| %>
+        <tr class="<%= cycle('odd', 'even') %>">
+          <td><%= link_to "##{rule.id}", "#rule-#{rule.id}" %></td>
+          <td><%= rule.enabled? ? '사용' : '미사용' %></td>
+          <td><%= rule.priority %></td>
+          <td>
+            <strong><%= @groups_by_id[rule.owner_group_id].try(:name) || rule.owner_group_id || '전체' %></strong>
+            /
+            <%= @trackers_by_id[rule.tracker_id].try(:name) || rule.tracker_id || '전체' %>
+            /
+            <%= rule.category_label.presence || rule.category_name_key || '전체' %>
+            <% if rule.prefix_signature.present? %>
+              <br>Prefix: <%= rule.prefix_signature %>
+            <% end %>
+            <% if rule.title_template.present? %>
+              <br>Template: <%= rule.title_template %>
+            <% end %>
+          </td>
+          <td><%= number_with_precision(rule.md, :precision => 2, :strip_insignificant_zeros => true) %></td>
+          <td><%= rule.sample_count %></td>
+          <td><%= rule.confidence %></td>
+          <td><%= format_time(rule.updated_at) if rule.updated_at %></td>
+        </tr>
+      <% end %>
+    </tbody>
+  </table>
+
   <% @rules.each do |rule| %>
-    <div class="box tabular">
+    <div class="box tabular" id="rule-<%= rule.id %>">
       <%= form_tag url_for(:controller => 'heatmap_estimation_rules', :action => 'update', :id => rule), :method => :patch do %>
         <h3>#<%= rule.id %> <%= rule.enabled? ? '사용' : '미사용' %></h3>
         <p>

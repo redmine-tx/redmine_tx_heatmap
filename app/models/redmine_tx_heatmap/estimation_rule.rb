@@ -41,8 +41,13 @@ module RedmineTxHeatmap
     end
 
     def self.ordered_for_matching
-      enabled.order(:priority => :asc, :updated_at => :desc).to_a.sort_by do |rule|
-        [rule.priority.to_i, -rule.specificity]
+      enabled.to_a.sort_by do |rule|
+        [
+          rule.priority.to_i,
+          -rule.specificity,
+          -rule.updated_at.to_i,
+          -rule.id.to_i
+        ]
       end
     end
 
